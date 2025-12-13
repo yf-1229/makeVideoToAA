@@ -35,6 +35,7 @@ import shutil
 import time
 import subprocess
 import json
+import re
 from typing import Optional
 from urllib.parse import urlparse
 
@@ -182,6 +183,116 @@ def newest_file_in_dir(d: str) -> str:
         raise FileNotFoundError("ダウンロードファイルが見つかりません: " + d)
     files.sort(key=lambda x: os.path.getmtime(x), reverse=True)
     return files[0]
+
+
+def download_subtitles(url: str, tmpdir: str) -> Optional[str]:
+    """
+    Download subtitles from a YouTube URL using yt-dlp.
+    Returns the path to the downloaded subtitle file, or None if unavailable.
+    """
+    out_template = os.path.join(tmpdir, "%(id)s.%(ext)s")
+    try:
+        if _HAS_YTDLP:
+            ydl_opts = {
+                "skip_download": True,
+                "writesubtitles": True,
+                "writeautomaticsub": True,
+                "subtitleslangs": ["ja", "en"],
+                "subtitlesformat": "vtt/srt/best",
+                "outtmpl": out_template,
+                "quiet": True,
+                "no_warnings": True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                ydl.extract_info(url, download=True)
+        else:
+            # fallback to external yt-dlp command
+            cmd = [
+                "yt-dlp",
+                "--skip-download",
+                "--write-sub",
+                "--write-auto-sub",
+                "--sub-lang", "ja,en",
+                "--sub-format", "vtt/srt/best",
+                "-o", out_template,
+                url
+            ]
+            proc = subprocess.run(cmd, capture_output=True, text=True)
+            if proc.returncode != 0:
+                return None
+        
+        # Find subtitle file in tmpdir
+        subtitle_files = [
+            f for f in os.listdir(tmpdir)
+            if f.endswith((".vtt", ".srt", ".ja.vtt", ".en.vtt", ".ja.srt", ".en.srt"))
+        ]
+        if subtitle_files:
+            # Prefer Japanese subtitles
+            ja_files = [f for f in subtitle_files if ".ja." in f]
+            if ja_files:
+                return os.path.join(tmpdir, ja_files[0])
+            return os.path.join(tmpdir, subtitle_files[0])
+        return None
+    except Exception:
+        return None
+
+
+def extract_text_from_subtitle(subtitle_path: str) -> str:
+    """
+    Extract plain text from a subtitle file (VTT or SRT format).
+    Returns the concatenated text content.
+    """
+    try:
+        with open(subtitle_path, "r", encoding="utf-8") as f:
+            content = f.read()
+        
+        # Remove VTT/SRT metadata and timestamps
+        # Remove WEBVTT header
+        content = re.sub(r"^WEBVTT.*?\n\n", "", content, flags=re.MULTILINE)
+        # Remove timestamp lines (e.g., "00:00:01.000 --> 00:00:05.000")
+        content = re.sub(r"\d{2}:\d{2}:\d{2}[.,]\d{3}\s*-->\s*\d{2}:\d{2}:\d{2}[.,]\d{3}", "", content)
+        # Remove sequence numbers
+        content = re.sub(r"^\d+\s*$", "", content, flags=re.MULTILINE)
+        # Remove HTML-like tags
+        content = re.sub(r"<[^>]+>", "", content)
+        # Remove extra whitespace
+        content = re.sub(r"\n\n+", "\n", content)
+        
+        return content.strip()
+    except Exception:
+        return ""
+
+
+def extract_kanji(text: str) -> list[str]:
+    """
+    Extract unique kanji characters from text.
+    Returns a list of unique kanji characters in order of appearance.
+    """
+    # Kanji Unicode ranges: U+4E00 to U+9FFF (CJK Unified Ideographs)
+    kanji_pattern = r"[\u4E00-\u9FFF]"
+    kanji_matches = re.findall(kanji_pattern, text)
+    
+    # Preserve order while removing duplicates
+    seen = set()
+    unique_kanji = []
+    for k in kanji_matches:
+        if k not in seen:
+            seen.add(k)
+            unique_kanji.append(k)
+    
+    return unique_kanji
+
+
+def create_ramp_with_kanji(kanji_list: list[str], original_ramp: str = DEFAULT_RAMP) -> str:
+    """
+    Create a new character ramp by prepending kanji to the original ramp.
+    If no kanji are provided, return the original ramp.
+    """
+    if not kanji_list:
+        return original_ramp
+    
+    kanji_str = "".join(kanji_list)
+    return kanji_str + original_ramp
 
 
 def get_duration_local(path: str) -> Optional[float]:
@@ -369,6 +480,7 @@ def main():
     video_path = src
     cut_requested_for_url = False
     max_process_frames = None  # for local file cut: how many frames to process
+    custom_ramp = args.chars  # Initialize with command-line provided chars or DEFAULT_RAMP
 
     # New feature: reject non-YouTube links or non-https protocols
     if is_url(src):
@@ -403,6 +515,23 @@ def main():
             video_path = download_with_yt_dlp(src, tmpdir, cut_to_30=cut_requested_for_url)
             downloaded = True
             sys.stderr.write(f"Downloaded -> {video_path}\n")
+            
+            # Extract subtitles and kanji for YouTube URLs
+            sys.stderr.write("字幕を取得しています...\n")
+            subtitle_path = download_subtitles(src, tmpdir)
+            if subtitle_path:
+                sys.stderr.write(f"字幕を取得しました: {subtitle_path}\n")
+                subtitle_text = extract_text_from_subtitle(subtitle_path)
+                if subtitle_text:
+                    kanji_list = extract_kanji(subtitle_text)
+                    if kanji_list:
+                        sys.stderr.write(f"字幕から {len(kanji_list)} 個の漢字を抽出しました\n")
+                        custom_ramp = create_ramp_with_kanji(kanji_list, args.chars)
+                        sys.stderr.write(f"文字ランプを更新しました（漢字を先頭に追加）\n")
+                    else:
+                        sys.stderr.write("字幕に漢字が見つかりませんでした\n")
+            else:
+                sys.stderr.write("字幕が利用できません\n")
         except Exception as e:
             if tmpdir and os.path.isdir(tmpdir) and not args.keep:
                 shutil.rmtree(tmpdir, ignore_errors=True)
@@ -463,7 +592,7 @@ def main():
 
             ascii_frame = frame_to_ascii(
                 frame,
-                chars=args.chars,
+                chars=custom_ramp,
                 aspect=args.aspect,
                 invert=False,
                 gamma=args.gamma,
