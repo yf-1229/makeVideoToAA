@@ -267,8 +267,13 @@ def extract_kanji(text: str) -> list[str]:
     """
     Extract unique kanji characters from text.
     Returns a list of unique kanji characters in order of appearance.
+    
+    Note: This uses the CJK Unified Ideographs Unicode range (U+4E00-U+9FFF),
+    which includes Japanese kanji, Chinese hanzi, and Korean hanja.
+    For Japanese subtitle context, this primarily extracts kanji.
     """
-    # Kanji Unicode ranges: U+4E00 to U+9FFF (CJK Unified Ideographs)
+    # CJK Unified Ideographs range: U+4E00 to U+9FFF
+    # (includes Japanese kanji, Chinese hanzi, Korean hanja)
     kanji_pattern = r"[\u4E00-\u9FFF]"
     kanji_matches = re.findall(kanji_pattern, text)
     
@@ -517,21 +522,25 @@ def main():
             sys.stderr.write(f"Downloaded -> {video_path}\n")
             
             # Extract subtitles and kanji for YouTube URLs
-            sys.stderr.write("字幕を取得しています...\n")
-            subtitle_path = download_subtitles(src, tmpdir)
-            if subtitle_path:
-                sys.stderr.write(f"字幕を取得しました: {subtitle_path}\n")
-                subtitle_text = extract_text_from_subtitle(subtitle_path)
-                if subtitle_text:
-                    kanji_list = extract_kanji(subtitle_text)
-                    if kanji_list:
-                        sys.stderr.write(f"字幕から {len(kanji_list)} 個の漢字を抽出しました\n")
-                        custom_ramp = create_ramp_with_kanji(kanji_list, args.chars)
-                        sys.stderr.write(f"文字ランプを更新しました（漢字を先頭に追加）\n")
-                    else:
-                        sys.stderr.write("字幕に漢字が見つかりませんでした\n")
-            else:
-                sys.stderr.write("字幕が利用できません\n")
+            try:
+                sys.stderr.write("字幕を取得しています...\n")
+                subtitle_path = download_subtitles(src, tmpdir)
+                if subtitle_path:
+                    sys.stderr.write(f"字幕を取得しました: {subtitle_path}\n")
+                    subtitle_text = extract_text_from_subtitle(subtitle_path)
+                    if subtitle_text:
+                        kanji_list = extract_kanji(subtitle_text)
+                        if kanji_list:
+                            sys.stderr.write(f"字幕から {len(kanji_list)} 個の漢字を抽出しました\n")
+                            custom_ramp = create_ramp_with_kanji(kanji_list, args.chars)
+                            sys.stderr.write(f"文字ランプを更新しました（漢字を先頭に追加）\n")
+                        else:
+                            sys.stderr.write("字幕に漢字が見つかりませんでした\n")
+                else:
+                    sys.stderr.write("字幕が利用できません\n")
+            except Exception as subtitle_error:
+                # If subtitle extraction fails, continue with original ramp
+                sys.stderr.write(f"字幕の処理中にエラーが発生しました（スキップします）: {subtitle_error}\n")
         except Exception as e:
             if tmpdir and os.path.isdir(tmpdir) and not args.keep:
                 shutil.rmtree(tmpdir, ignore_errors=True)
