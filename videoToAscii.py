@@ -57,6 +57,9 @@ def enable_vt_mode():
     Windows コンソールで ANSI VT (仮想端末) 処理を有効化する。
     ENABLE_VIRTUAL_TERMINAL_PROCESSING フラグを設定して、ANSI エスケープシーケンスを使えるようにする。
     失敗しても例外は発生させず、処理を続行する（非 Windows 環境や権限不足の場合でも安全）。
+    
+    戻り値: なし
+    副作用: 現在のプロセスのコンソールモードを変更する（Windows のみ）
     """
     if sys.platform != "win32":
         # Windows 以外では何もしない
@@ -71,6 +74,7 @@ def enable_vt_mode():
         kernel32 = ctypes.windll.kernel32
         h_out = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
         if h_out == -1 or h_out is None:
+            # ハンドルが取得できない場合は ANSI サポートなしで続行
             return
 
         mode = wintypes.DWORD()
