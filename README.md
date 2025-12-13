@@ -1,5 +1,3 @@
-# denko-introduce
-
 ## ToUse
 
 ` python videoToAscii.py "(YouTube URL)" `
