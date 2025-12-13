@@ -1,0 +1,6 @@
+opencv-python
+numpy
+yt-dlp
+gspread
+oauth2client
+requests

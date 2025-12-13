@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-aa_video_ascii_64palette.py
+videoToAscii.py
 
 - ブロック描画は禁止（半ブロックモード無し）
 - 文字の「濃度（ランプ）」で明暗を表現
@@ -12,18 +12,24 @@ aa_video_ascii_64palette.py
 - width は 100 に固定（コマンドラインで変更不可）
 - 新機能: YouTube 以外のリンク、あるいは https 以外のプロトコルが入力されたときは、
   処理をキャンセルしてアラート（端末プロンプトによる警告）を表示して終了する。
+- Windows サポート: Windows コンソールで ANSI エスケープシーケンスを有効化（enable_vt_mode()）
 
 依存:
     pip install opencv-python numpy yt-dlp
     （GUI 不要な環境では opencv-python-headless を使ってください）
 
 使い方（例）:
-    python aa_video_ascii_64palette.py "https://www.youtube.com/watch?v=XXXX"
-    python aa_video_ascii_64palette.py local.mp4 --levels 4 --clahe
+    python videoToAscii.py "https://www.youtube.com/watch?v=XXXX"
+    python videoToAscii.py local.mp4 --levels 4 --clahe
+    
+    Windows の場合:
+    run_videoToAscii.cmd "https://www.youtube.com/watch?v=XXXX"
+    または PowerShell: python videoToAscii.py "https://www.youtube.com/watch?v=XXXX"
 
 注意:
 - デフォルトでチャネル当たり 4 レベル (= 4^3 = 64 色) に量子化します。
 - ターミナルが ANSI TrueColor をサポートしていれば色が正しく表示されます。
+- Windows 10/11 では ANSI サポートが自動的に有効化されます（失敗しても処理は続行されます）
 - インタラクティブなプロンプトが出ます。CI 等の非対話環境では動作しないことがあります。
 """
 from __future__ import annotations
@@ -44,6 +50,38 @@ try:
 except Exception:
     sys.stderr.write("必要なライブラリが見つかりません。pip install opencv-python numpy\n")
     raise
+
+
+def enable_vt_mode():
+    """
+    Windows コンソールで ANSI VT (仮想端末) 処理を有効化する。
+    ENABLE_VIRTUAL_TERMINAL_PROCESSING フラグを設定して、ANSI エスケープシーケンスを使えるようにする。
+    失敗しても例外は発生させず、処理を続行する（非 Windows 環境や権限不足の場合でも安全）。
+    """
+    if sys.platform != "win32":
+        # Windows 以外では何もしない
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        STD_OUTPUT_HANDLE = -11
+
+        kernel32 = ctypes.windll.kernel32
+        h_out = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+        if h_out == -1 or h_out is None:
+            return
+
+        mode = wintypes.DWORD()
+        if not kernel32.GetConsoleMode(h_out, ctypes.byref(mode)):
+            return
+
+        mode.value |= ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        kernel32.SetConsoleMode(h_out, mode)
+    except Exception:
+        # ctypes が使えない、または設定に失敗した場合でも続行
+        pass
 
 # try import yt_dlp; fallback to external command
 try:
@@ -362,6 +400,9 @@ def ask_user_cut_or_abort(source_desc: str, duration_sec: Optional[float]) -> bo
 
 
 def main():
+    # Windows コンソールで ANSI サポートを有効化（起動時に一度だけ実行）
+    enable_vt_mode()
+    
     args = parse_args()
     src = args.input
     tmpdir = None
