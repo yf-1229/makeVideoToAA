@@ -12,6 +12,7 @@ aa_video_ascii_64palette.py
 - width は 100 に固定（コマンドラインで変更不可）
 - 新機能: YouTube 以外のリンク、あるいは https 以外のプロトコルが入力されたときは、
   処理をキャンセルしてアラート（端末プロンプトによる警告）を表示して終了する。
+- Windows サポート: Windows コンソールで ANSI エスケープシーケンスを有効化します。
 
 依存:
     pip install opencv-python numpy yt-dlp
@@ -57,6 +58,34 @@ DEFAULT_RAMP = "$@B%8&WM#*oahkbdpqwmZ0QLCJUYXzcvunxrjft/\\|()1{}[]?-_+~<>i!lI;:,
 DEFAULT_ASPECT = 0.55  # character aspect ratio correction
 FIXED_WIDTH = 100      # width is fixed to 100 as requested
 MAX_SECONDS = 30 * 60  # 30 minutes in seconds
+
+
+def enable_vt_mode():
+    """
+    Windows コンソールで ANSI エスケープシーケンス（仮想端末処理）を有効にします。
+    失敗しても致命的なエラーとはせず、静かに続行します。
+    POSIX システムでは何もしません。
+    """
+    if sys.platform != "win32":
+        return
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # Get handle to stdout
+        STD_OUTPUT_HANDLE = -11
+        h_out = kernel32.GetStdHandle(STD_OUTPUT_HANDLE)
+        # Get current console mode
+        mode = ctypes.c_ulong()
+        if not kernel32.GetConsoleMode(h_out, ctypes.byref(mode)):
+            return
+        # ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004
+        ENABLE_VT_PROCESSING = 0x0004
+        new_mode = mode.value | ENABLE_VT_PROCESSING
+        # Set the new mode
+        kernel32.SetConsoleMode(h_out, new_mode)
+    except Exception:
+        # Non-fatal: if we can't enable VT mode, just continue
+        pass
 
 
 def is_url(s: str) -> bool:
@@ -362,6 +391,7 @@ def ask_user_cut_or_abort(source_desc: str, duration_sec: Optional[float]) -> bo
 
 
 def main():
+    enable_vt_mode()
     args = parse_args()
     src = args.input
     tmpdir = None

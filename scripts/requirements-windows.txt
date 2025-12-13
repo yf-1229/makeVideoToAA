@@ -1,0 +1,9 @@
+# Python package requirements for videoToAscii on Windows
+# Install with: pip install -r requirements-windows.txt
+
+opencv-python>=4.5.0
+numpy>=1.19.0
+yt-dlp>=2023.0.0
+gspread>=5.0.0
+oauth2client>=4.1.0
+requests>=2.25.0
