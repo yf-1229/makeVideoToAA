@@ -1,17 +1,8 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
 """
 aa_video_ascii_64palette.py
-
-- ブロック描画は禁止（半ブロックモード無し）
-- 文字の「濃度（ランプ）」で明暗を表現
-- 色は文字の前景色で表現（ANSI を使用するが、値は 4-level per channel に量子化して 64 色に制限）
-- YouTube URL に対しては yt-dlp を使ってメタ情報を取得し、30分を超える場合はダウンロードせずに
-  「先頭30分だけ処理（カット）する」か「キャンセルするか」をユーザーに尋ねる。
-- ローカルファイルは再生前に長さをチェックし、30分超なら同様にユーザーに確認する。
-- width は 100 に固定（コマンドラインで変更不可）
-- 新機能: YouTube 以外のリンク、あるいは https 以外のプロトコルが入力されたときは、
-  処理をキャンセルしてアラート（端末プロンプトによる警告）を表示して終了する。
 
 依存:
     pip install opencv-python numpy yt-dlp
@@ -22,10 +13,10 @@ aa_video_ascii_64palette.py
     python aa_video_ascii_64palette.py local.mp4 --levels 4 --clahe
 
 注意:
-- デフォルトでチャネル当たり 4 レベル (= 4^3 = 64 色) に量子化します。
 - ターミナルが ANSI TrueColor をサポートしていれば色が正しく表示されます。
 - インタラクティブなプロンプトが出ます。CI 等の非対話環境では動作しないことがあります。
 """
+
 from __future__ import annotations
 import argparse
 import os
@@ -639,3 +630,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
