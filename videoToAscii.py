@@ -2,8 +2,6 @@
 # -*- coding: utf-8 -*-
 
 """
-aa_video_ascii_64palette.py
-
 依存:
     pip install opencv-python numpy yt-dlp
     （GUI 不要な環境では opencv-python-headless を使ってください）
@@ -630,4 +628,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
